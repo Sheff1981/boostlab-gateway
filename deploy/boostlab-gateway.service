@@ -1,0 +1,30 @@
+[Unit]
+Description=BOOSTLAB low-latency gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=boostlab
+Group=boostlab
+EnvironmentFile=-/etc/boostlab/gateway.env
+ExecStart=/usr/local/bin/boostlab-gateway
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_INET AF_INET6
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
