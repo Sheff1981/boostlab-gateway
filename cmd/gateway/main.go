@@ -33,13 +33,27 @@ func main() {
 	}()
 
 	httpServer := &http.Server{
-		Addr:              cfg.HTTPAddr,
-		Handler:           status.New(cfg.NodeID, cfg.Region, cfg.UDPAddr, startedAt).Routes(),
+		Addr: cfg.HTTPAddr,
+		Handler: status.New(
+			cfg.NodeID,
+			cfg.Region,
+			cfg.UDPAddr,
+			cfg.WireGuardPublicKey,
+			cfg.WireGuardPort,
+			startedAt,
+		).Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	go func() {
-		log.Info("http control listening", "addr", cfg.HTTPAddr, "node_id", cfg.NodeID, "region", cfg.Region)
+		log.Info(
+			"http control listening",
+			"addr", cfg.HTTPAddr,
+			"node_id", cfg.NodeID,
+			"region", cfg.Region,
+			"wireguard_port", cfg.WireGuardPort,
+			"wireguard_public_key_configured", cfg.WireGuardPublicKey != "",
+		)
 		err := httpServer.ListenAndServe()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Error("http server stopped", "error", err)
