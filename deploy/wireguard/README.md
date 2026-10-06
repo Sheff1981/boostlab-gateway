@@ -33,3 +33,18 @@ The Android WireGuard config uses `IncludedApplications` so only the user-select
 ## Current status
 
 The Android WireGuard backend and secure client identity storage are present as Stage 4 groundwork. They are not connected automatically until a real gateway has a server key, client peer, tunnel address, and validated route.
+
+
+## First Android peer
+
+After installing `boostlab-peerctl`, register the public key shown by the Android app:
+
+    boostlab-peerctl --public-key '<ANDROID_PUBLIC_KEY>' --address 10.77.0.2/32
+
+The command is dry-run by default. If the values are correct, apply them to the live WireGuard interface:
+
+    sudo boostlab-peerctl --public-key '<ANDROID_PUBLIC_KEY>' --address 10.77.0.2/32 --apply
+
+The tool validates the key format and requires a single-host address (/32 for IPv4 or /128 for IPv6) before invoking `wg set`.
+
+For persistent configuration across reboots, mirror the peer in the protected `/etc/wireguard/wg0.conf` or use a future authenticated provisioning service. Do not store client private keys on the server.
