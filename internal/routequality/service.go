@@ -161,12 +161,13 @@ func firstPublicIP(ips []net.IP) (net.IP, bool) {
 }
 
 func calculate(targetID string, samples []*int, measuredAt time.Time) Metrics {
-	received := make([]int, 0, len(samples))
+	receivedOrdered := make([]int, 0, len(samples))
 	for _, sample := range samples {
 		if sample != nil {
-			received = append(received, *sample)
+			receivedOrdered = append(receivedOrdered, *sample)
 		}
 	}
+	received := append([]int(nil), receivedOrdered...)
 	sort.Ints(received)
 
 	var median *int
@@ -190,16 +191,16 @@ func calculate(targetID string, samples []*int, measuredAt time.Time) Metrics {
 	}
 
 	var jitter *int
-	if len(received) >= 2 {
+	if len(receivedOrdered) >= 2 {
 		total := 0
-		for i := 1; i < len(received); i++ {
-			diff := received[i] - received[i-1]
+		for i := 1; i < len(receivedOrdered); i++ {
+			diff := receivedOrdered[i] - receivedOrdered[i-1]
 			if diff < 0 {
 				diff = -diff
 			}
 			total += diff
 		}
-		value := int(math.Round(float64(total) / float64(len(received)-1)))
+		value := int(math.Round(float64(total) / float64(len(receivedOrdered)-1)))
 		jitter = &value
 	}
 
