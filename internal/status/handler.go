@@ -7,11 +7,11 @@ import (
 )
 
 type Snapshot struct {
-	Service   string
-	NodeID    string
-	Region    string
-	UDPAddr   string
-	StartedAt string
+	Service   string `json:"service"`
+	NodeID    string `json:"node_id"`
+	Region    string `json:"region"`
+	UDPAddr   string `json:"udp_addr"`
+	StartedAt string `json:"started_at"`
 }
 
 type Handler struct {
