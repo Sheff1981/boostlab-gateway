@@ -15,14 +15,17 @@ jobs:
           cache: true
       - run: go test ./...
       - run: go vet ./...
-      - name: Build Linux gateway
+      - name: Build Linux binaries
         run: |
           mkdir -p dist
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/boostlab-gateway-linux-amd64 ./cmd/gateway
-      - name: Upload Linux gateway
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/boostlab-peerctl-linux-amd64 ./cmd/peerctl
+      - name: Upload Linux binaries
         uses: actions/upload-artifact@v4
         with:
           name: boostlab-gateway-linux-amd64
-          path: dist/boostlab-gateway-linux-amd64
+          path: |
+            dist/boostlab-gateway-linux-amd64
+            dist/boostlab-peerctl-linux-amd64
           if-no-files-found: error
           retention-days: 14
