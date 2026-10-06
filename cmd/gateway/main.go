@@ -12,6 +12,7 @@ import (
 
 	"github.com/Sheff1981/boostlab-gateway/internal/config"
 	"github.com/Sheff1981/boostlab-gateway/internal/probe"
+	"github.com/Sheff1981/boostlab-gateway/internal/routequality"
 	"github.com/Sheff1981/boostlab-gateway/internal/status"
 )
 
@@ -32,16 +33,30 @@ func main() {
 		}
 	}()
 
+	routeTargets, err := routequality.ParseTargets(os.Getenv("BOOSTLAB_GAME_ROUTES_JSON"))
+	if err != nil {
+		log.Error("invalid game route targets", "error", err)
+		os.Exit(2)
+	}
+	log.Info("game route targets loaded", "count", len(routeTargets))
+
+	statusHandler := status.New(
+		cfg.NodeID,
+		cfg.Region,
+		cfg.UDPAddr,
+		cfg.WireGuardPublicKey,
+		cfg.WireGuardPort,
+		startedAt,
+	).Routes()
+	routeHandler := routequality.New(routeTargets).Routes()
+
+	httpMux := http.NewServeMux()
+	httpMux.Handle("/v1/route-quality/", routeHandler)
+	httpMux.Handle("/", statusHandler)
+
 	httpServer := &http.Server{
-		Addr: cfg.HTTPAddr,
-		Handler: status.New(
-			cfg.NodeID,
-			cfg.Region,
-			cfg.UDPAddr,
-			cfg.WireGuardPublicKey,
-			cfg.WireGuardPort,
-			startedAt,
-		).Routes(),
+		Addr:              cfg.HTTPAddr,
+		Handler:           httpMux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
