@@ -36,10 +36,11 @@ type cachedMeasurement struct {
 }
 
 type Service struct {
-	mu      sync.Mutex
-	targets map[string]Target
-	cache   map[string]cachedMeasurement
-	now     func() time.Time
+	mu          sync.Mutex
+	targets     map[string]Target
+	cache       map[string]cachedMeasurement
+	targetLocks map[string]*sync.Mutex
+	now         func() time.Time
 	lookup  func(context.Context, string) ([]net.IP, error)
 	dial    func(context.Context, string, string) (net.Conn, error)
 }
@@ -52,9 +53,10 @@ func New(targets []Target) *Service {
 
 	dialer := &net.Dialer{Timeout: connectTimeout}
 	return &Service{
-		targets: byID,
-		cache:   make(map[string]cachedMeasurement),
-		now:     time.Now,
+		targets:     byID,
+		cache:       make(map[string]cachedMeasurement),
+		targetLocks: make(map[string]*sync.Mutex, len(byID)),
+		now:         time.Now,
 		lookup: func(ctx context.Context, host string) ([]net.IP, error) {
 			return net.DefaultResolver.LookupIP(ctx, "ip", host)
 		},
@@ -88,17 +90,34 @@ var errUnknownTarget = errors.New("unknown route target")
 
 func (s *Service) Measure(ctx context.Context, targetID string) (Metrics, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	target, ok := s.targets[targetID]
 	if !ok {
+		s.mu.Unlock()
 		return Metrics{}, errUnknownTarget
 	}
-
 	now := s.now().UTC()
 	if cached, ok := s.cache[targetID]; ok && now.Before(cached.until) {
+		s.mu.Unlock()
 		return cached.metrics, nil
 	}
+	targetLock := s.targetLocks[targetID]
+	if targetLock == nil {
+		targetLock = &sync.Mutex{}
+		s.targetLocks[targetID] = targetLock
+	}
+	s.mu.Unlock()
+
+	targetLock.Lock()
+	defer targetLock.Unlock()
+
+	// Another request may have refreshed this target while we waited.
+	s.mu.Lock()
+	now = s.now().UTC()
+	if cached, ok := s.cache[targetID]; ok && now.Before(cached.until) {
+		s.mu.Unlock()
+		return cached.metrics, nil
+	}
+	s.mu.Unlock()
 
 	ips, err := s.lookup(ctx, target.Host)
 	if err != nil {
@@ -137,10 +156,12 @@ func (s *Service) Measure(ctx context.Context, targetID string) (Metrics, error)
 	}
 
 	metrics := calculate(target.ID, results, now)
+	s.mu.Lock()
 	s.cache[targetID] = cachedMeasurement{
 		metrics: metrics,
 		until:   now.Add(cacheTTL),
 	}
+	s.mu.Unlock()
 	return metrics, nil
 }
 
