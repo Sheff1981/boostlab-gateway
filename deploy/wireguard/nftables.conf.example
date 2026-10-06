@@ -1,0 +1,16 @@
+table inet boostlab_filter {
+    chain forward {
+        type filter hook forward priority filter; policy drop;
+
+        iifname "wg0" oifname "<WAN_IFACE>" accept
+        iifname "<WAN_IFACE>" oifname "wg0" ct state established,related accept
+    }
+}
+
+table ip boostlab_nat {
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+
+        oifname "<WAN_IFACE>" ip saddr 10.77.0.0/24 masquerade
+    }
+}
