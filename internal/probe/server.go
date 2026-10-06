@@ -5,10 +5,15 @@ import (
 	"errors"
 	"log/slog"
 	"net"
+	"strings"
 	"time"
 )
 
-const Magic = "BOOSTLAB/PROBE/1"
+const (
+	MagicV1       = "BOOSTLAB/PROBE/1"
+	MagicV2Prefix = "BOOSTLAB/PROBE/2/"
+	maxProbeBytes = 96
+)
 
 type Server struct {
 	Addr string
@@ -27,7 +32,7 @@ func (s Server) Run(ctx context.Context) error {
 		_ = conn.Close()
 	}()
 
-	buf := make([]byte, 512)
+	buf := make([]byte, maxProbeBytes+1)
 	for {
 		n, peer, err := conn.ReadFrom(buf)
 		if err != nil {
@@ -37,13 +42,57 @@ func (s Server) Run(ctx context.Context) error {
 			return err
 		}
 
-		if string(buf[:n]) != Magic {
+		if !validPayload(buf[:n]) {
 			continue
 		}
 
 		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
-		if _, err := conn.WriteTo([]byte(Magic), peer); err != nil && s.Log != nil {
+		if _, err := conn.WriteTo(buf[:n], peer); err != nil && s.Log != nil {
 			s.Log.Warn("probe reply failed", "peer", peer.String(), "error", err)
 		}
 	}
+}
+
+func validPayload(payload []byte) bool {
+	if len(payload) == 0 || len(payload) > maxProbeBytes {
+		return false
+	}
+
+	text := string(payload)
+	if text == MagicV1 {
+		return true
+	}
+
+	if !strings.HasPrefix(text, MagicV2Prefix) {
+		return false
+	}
+
+	rest := strings.TrimPrefix(text, MagicV2Prefix)
+	parts := strings.Split(rest, "/")
+	if len(parts) != 2 {
+		return false
+	}
+
+	nonce := parts[0]
+	sequence := parts[1]
+
+	if len(nonce) < 8 || len(nonce) > 32 {
+		return false
+	}
+	if len(sequence) < 1 || len(sequence) > 3 {
+		return false
+	}
+
+	for _, r := range nonce {
+		if !((r >= 'a' && r <= 'f') || (r >= '0' && r <= '9')) {
+			return false
+		}
+	}
+	for _, r := range sequence {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+
+	return true
 }
