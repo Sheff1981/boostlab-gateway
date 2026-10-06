@@ -1,0 +1,11 @@
+[Interface]
+Address = 10.77.0.1/24
+ListenPort = 51820
+PrivateKey = <SERVER_PRIVATE_KEY>
+
+# Add one [Peer] block per registered client.
+# The Android client generates and keeps its private key locally.
+
+[Peer]
+PublicKey = <CLIENT_PUBLIC_KEY>
+AllowedIPs = 10.77.0.2/32
