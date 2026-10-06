@@ -32,6 +32,11 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/boostlab-gateway-linux-amd64 ./cmd/gateway
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/boostlab-peerctl-linux-amd64 ./cmd/peerctl
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/boostlab-gateway-windows-amd64.exe ./cmd/gateway
+          mkdir -p dist/windows-local
+          cp dist/boostlab-gateway-windows-amd64.exe dist/windows-local/
+          cp deploy/windows-local/start-local-test.ps1 dist/windows-local/
+          cp deploy/windows-local/remove-firewall-rule.ps1 dist/windows-local/
+          cp deploy/windows-local/README.md dist/windows-local/
 
       - name: Upload Linux gateway
         uses: actions/upload-artifact@v4
@@ -43,10 +48,10 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Upload Windows local-test gateway
+      - name: Upload Windows local-test bundle
         uses: actions/upload-artifact@v4
         with:
-          name: boostlab-gateway-windows-amd64
-          path: dist/boostlab-gateway-windows-amd64.exe
+          name: boostlab-local-test-windows
+          path: dist/windows-local/
           if-no-files-found: error
           retention-days: 14
