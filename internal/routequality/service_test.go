@@ -1,6 +1,7 @@
 package routequality
 
 import (
+	"context"
 	"net"
 	"testing"
 	"time"
@@ -58,5 +59,47 @@ func TestFirstPublicIPRejectsPrivate(t *testing.T) {
 	})
 	if !ok || !ip.Equal(net.ParseIP("1.1.1.1")) {
 		t.Fatalf("unexpected public IP: %v ok=%v", ip, ok)
+	}
+}
+
+
+func TestMeasureBindsEndpointAndCachesAfterCompletion(t *testing.T) {
+	target := Target{ID: "game-eu", Host: "game.example.com", TCPPort: 443}
+	service := New([]Target{target})
+
+	now := time.Unix(1_700_000_000, 0)
+	service.now = func() time.Time { return now }
+	service.lookup = func(context.Context, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("1.1.1.1")}, nil
+	}
+
+	dialCount := 0
+	service.dial = func(context.Context, string, string) (net.Conn, error) {
+		dialCount++
+		now = now.Add(time.Second)
+		client, server := net.Pipe()
+		_ = server.Close()
+		return client, nil
+	}
+
+	metrics, err := service.Measure(context.Background(), target.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if metrics.TargetID != target.ID ||
+		metrics.TargetHost != target.Host ||
+		metrics.TCPPort != target.TCPPort {
+		t.Fatalf("metrics not bound to exact endpoint: %#v", metrics)
+	}
+	if dialCount != defaultSamples {
+		t.Fatalf("expected %d probes, got %d", defaultSamples, dialCount)
+	}
+
+	_, err = service.Measure(context.Background(), target.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dialCount != defaultSamples {
+		t.Fatalf("expected cached result after slow measurement, got %d dials", dialCount)
 	}
 }
