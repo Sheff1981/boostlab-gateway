@@ -58,6 +58,9 @@ func main() {
 		Addr:              cfg.HTTPAddr,
 		Handler:           httpMux,
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      12 * time.Second,
+		IdleTimeout:       30 * time.Second,
 	}
 
 	go func() {
