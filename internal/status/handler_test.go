@@ -108,3 +108,51 @@ func TestReadLoadAverageMissingFileIsSafe(t *testing.T) {
 		t.Fatal("expected no load average on missing file")
 	}
 }
+
+
+func TestReadyRejectsConfiguredBrokenDataPlane(t *testing.T) {
+	handler := New(
+		"node-1",
+		"test",
+		":51821",
+		"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+		51820,
+		time.Now(),
+	)
+	handler.WireGuardInterface = "definitely-missing-wg-interface"
+	handler.IPv4ForwardingPath = "/definitely/missing/ip_forward"
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	res := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(res, req)
+
+	if res.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", res.Code)
+	}
+}
+
+func TestReadyAcceptsConfiguredWorkingDataPlane(t *testing.T) {
+	forwardingFile := t.TempDir() + "/ip_forward"
+	if err := os.WriteFile(forwardingFile, []byte("1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := New(
+		"node-1",
+		"test",
+		":51821",
+		"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+		51820,
+		time.Now(),
+	)
+	handler.WireGuardInterface = "lo"
+	handler.IPv4ForwardingPath = forwardingFile
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	res := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(res, req)
+
+	if res.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.Code)
+	}
+}
