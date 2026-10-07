@@ -41,6 +41,18 @@ func main() {
 	}
 	log.Info("game route targets loaded", "count", len(routeTargets))
 
+	peerManager := &provision.PeerManager{
+		Interface:  cfg.WireGuardInterface,
+		TunnelCIDR: cfg.TunnelCIDR,
+		Persist:    cfg.PersistPeers,
+		DataFile:   cfg.PeerDataFile,
+	}
+	if restored, err := peerManager.Restore(ctx); err != nil {
+		log.Error("failed to restore provisioned WireGuard peers", "error", err)
+	} else if restored > 0 {
+		log.Info("provisioned WireGuard peers restored", "count", restored)
+	}
+
 	statusHandler := status.New(
 		cfg.NodeID,
 		cfg.Region,
@@ -53,11 +65,7 @@ func main() {
 	provisionHandler := provision.Handler{
 		NodeID: cfg.NodeID,
 		Secret: []byte(cfg.ProvisioningSecret),
-		Peers: provision.PeerManager{
-			Interface:  cfg.WireGuardInterface,
-			TunnelCIDR: cfg.TunnelCIDR,
-			Persist:    cfg.PersistPeers,
-		},
+		Peers:  peerManager,
 	}.Routes()
 
 	httpMux := http.NewServeMux()
