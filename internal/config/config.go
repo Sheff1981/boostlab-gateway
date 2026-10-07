@@ -12,6 +12,10 @@ type Config struct {
 	UDPAddr            string
 	WireGuardPublicKey string
 	WireGuardPort      int
+	WireGuardInterface string
+	TunnelCIDR         string
+	ProvisioningSecret string
+	PersistPeers       bool
 }
 
 func Load() Config {
@@ -22,6 +26,10 @@ func Load() Config {
 		UDPAddr:            envOr("BOOSTLAB_UDP_ADDR", ":51821"),
 		WireGuardPublicKey: os.Getenv("BOOSTLAB_WG_PUBLIC_KEY"),
 		WireGuardPort:      envIntOr("BOOSTLAB_WG_PORT", 51820),
+		WireGuardInterface: envOr("BOOSTLAB_WG_INTERFACE", "wg0"),
+		TunnelCIDR:         envOr("BOOSTLAB_TUNNEL_CIDR", "10.77.0.0/24"),
+		ProvisioningSecret: os.Getenv("BOOSTLAB_PROVISIONING_SECRET"),
+		PersistPeers:       envBoolOr("BOOSTLAB_WG_PERSIST_PEERS", true),
 	}
 }
 
@@ -39,6 +47,19 @@ func envIntOr(key string, fallback int) int {
 	}
 
 	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+
+func envBoolOr(key string, fallback bool) bool {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
 	if err != nil {
 		return fallback
 	}
