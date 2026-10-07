@@ -17,6 +17,11 @@ func (h Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /v1/peers/register", func(w http.ResponseWriter, r *http.Request) {
+		if len(h.Secret) < 32 {
+			http.Error(w, "peer provisioning is not configured", http.StatusServiceUnavailable)
+			return
+		}
+
 		const prefix = "Bearer "
 		auth := strings.TrimSpace(r.Header.Get("Authorization"))
 		if !strings.HasPrefix(auth, prefix) {
