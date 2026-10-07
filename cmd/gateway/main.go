@@ -66,6 +66,7 @@ func main() {
 		NodeID: cfg.NodeID,
 		Secret: []byte(cfg.ProvisioningSecret),
 		Peers:  peerManager,
+		Replay: provision.NewTicketReplayGuard(4096),
 	}.Routes()
 
 	httpMux := http.NewServeMux()
