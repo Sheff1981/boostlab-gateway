@@ -12,6 +12,7 @@ import (
 
 	"github.com/Sheff1981/boostlab-gateway/internal/config"
 	"github.com/Sheff1981/boostlab-gateway/internal/probe"
+	"github.com/Sheff1981/boostlab-gateway/internal/provision"
 	"github.com/Sheff1981/boostlab-gateway/internal/routequality"
 	"github.com/Sheff1981/boostlab-gateway/internal/status"
 )
@@ -49,9 +50,19 @@ func main() {
 		startedAt,
 	).Routes()
 	routeHandler := routequality.New(routeTargets).Routes()
+	provisionHandler := provision.Handler{
+		NodeID: cfg.NodeID,
+		Secret: []byte(cfg.ProvisioningSecret),
+		Peers: provision.PeerManager{
+			Interface:  cfg.WireGuardInterface,
+			TunnelCIDR: cfg.TunnelCIDR,
+			Persist:    cfg.PersistPeers,
+		},
+	}.Routes()
 
 	httpMux := http.NewServeMux()
 	httpMux.Handle("/v1/route-quality/", routeHandler)
+	httpMux.Handle("/v1/peers/", provisionHandler)
 	httpMux.Handle("/", statusHandler)
 
 	httpServer := &http.Server{
