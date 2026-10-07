@@ -11,6 +11,7 @@ type Handler struct {
 	NodeID string
 	Secret []byte
 	Peers  *PeerManager
+	Replay *TicketReplayGuard
 }
 
 func (h Handler) Routes() http.Handler {
@@ -37,6 +38,11 @@ func (h Handler) Routes() http.Handler {
 		)
 		if err != nil {
 			http.Error(w, "invalid provisioning ticket", http.StatusUnauthorized)
+			return
+		}
+
+		if h.Replay == nil || !h.Replay.Use(claims.Nonce, claims.ExpiresAtUnix, time.Now()) {
+			http.Error(w, "provisioning ticket already used", http.StatusUnauthorized)
 			return
 		}
 
