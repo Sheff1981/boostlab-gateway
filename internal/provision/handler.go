@@ -10,7 +10,7 @@ import (
 type Handler struct {
 	NodeID string
 	Secret []byte
-	Peers  PeerManager
+	Peers  *PeerManager
 }
 
 func (h Handler) Routes() http.Handler {
@@ -40,6 +40,10 @@ func (h Handler) Routes() http.Handler {
 			return
 		}
 
+		if h.Peers == nil {
+			http.Error(w, "peer manager unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		address, err := h.Peers.Register(r.Context(), claims.WireGuardKey)
 		if err != nil {
 			http.Error(w, "failed to register WireGuard peer", http.StatusServiceUnavailable)
