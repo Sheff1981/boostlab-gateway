@@ -174,3 +174,28 @@ func TestPeerManagerRestoresStoredPeers(t *testing.T) {
 		t.Fatalf("unexpected restore commands: %#v", runner.calls)
 	}
 }
+
+
+func TestTicketReplayGuardRejectsSecondUse(t *testing.T) {
+	guard := NewTicketReplayGuard(128)
+	now := time.Unix(1_800_000_000, 0)
+
+	if !guard.Use("nonce-1", now.Add(time.Minute).Unix(), now) {
+		t.Fatal("expected first use to succeed")
+	}
+	if guard.Use("nonce-1", now.Add(time.Minute).Unix(), now.Add(time.Second)) {
+		t.Fatal("expected replay to be rejected")
+	}
+}
+
+func TestTicketReplayGuardExpiresEntries(t *testing.T) {
+	guard := NewTicketReplayGuard(128)
+	now := time.Unix(1_800_000_000, 0)
+
+	if !guard.Use("nonce-1", now.Add(time.Second).Unix(), now) {
+		t.Fatal("expected first use to succeed")
+	}
+	if !guard.Use("nonce-1", now.Add(time.Minute).Unix(), now.Add(2*time.Second)) {
+		t.Fatal("expected expired nonce to be reusable")
+	}
+}
