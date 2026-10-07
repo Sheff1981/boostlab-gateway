@@ -164,6 +164,7 @@ func (s *Service) Measure(ctx context.Context, targetID string) (Metrics, error)
 	metrics.TargetHost = target.Host
 	metrics.TCPPort = target.TCPPort
 	finishedAt := s.now().UTC()
+	metrics.MeasuredAt = finishedAt
 	s.mu.Lock()
 	s.cache[targetID] = cachedMeasurement{
 		metrics: metrics,
