@@ -6,6 +6,7 @@ import (
 	"net"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/Sheff1981/boostlab-gateway/internal/peer"
 )
@@ -24,12 +25,19 @@ type PeerManager struct {
 	Interface  string
 	TunnelCIDR string
 	Persist    bool
+	DataFile   string
 	Runner     CommandRunner
+
+	mu sync.Mutex
 }
 
-func (m PeerManager) Register(ctx context.Context, publicKey string) (string, error) {
-	if m.Runner == nil {
-		m.Runner = ExecRunner{}
+func (m *PeerManager) Register(ctx context.Context, publicKey string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	runner := m.Runner
+	if runner == nil {
+		runner = ExecRunner{}
 	}
 	iface := strings.TrimSpace(m.Interface)
 	if iface == "" {
@@ -46,7 +54,7 @@ func (m PeerManager) Register(ctx context.Context, publicKey string) (string, er
 		return "", fmt.Errorf("automatic provisioning currently requires an IPv4 /24 tunnel")
 	}
 
-	output, err := m.Runner.Run(ctx, "wg", "show", iface, "allowed-ips")
+	output, err := runner.Run(ctx, "wg", "show", iface, "allowed-ips")
 	if err != nil {
 		return "", fmt.Errorf("read WireGuard peers: %w", err)
 	}
@@ -55,9 +63,7 @@ func (m PeerManager) Register(ctx context.Context, publicKey string) (string, er
 	publicKey = strings.TrimSpace(publicKey)
 	if existing := existingByKey[publicKey]; existing != "" {
 		if m.Persist {
-			if _, err := m.Runner.Run(ctx, "wg-quick", "save", iface); err != nil {
-				return "", fmt.Errorf("peer exists but persistence failed: %w", err)
-			}
+			_ = m.persistCurrent(existingByKey)
 		}
 		return existing, nil
 	}
@@ -83,22 +89,84 @@ func (m PeerManager) Register(ctx context.Context, publicKey string) (string, er
 		return "", err
 	}
 
-	if output, err := m.Runner.Run(
+	if commandOutput, err := runner.Run(
 		ctx,
 		"wg", "set", iface,
 		"peer", publicKey,
 		"allowed-ips", address,
 	); err != nil {
-		return "", fmt.Errorf("apply WireGuard peer: %w: %s", err, strings.TrimSpace(string(output)))
+		return "", fmt.Errorf(
+			"apply WireGuard peer: %w: %s",
+			err,
+			strings.TrimSpace(string(commandOutput)),
+		)
 	}
 
 	if m.Persist {
-		if output, err := m.Runner.Run(ctx, "wg-quick", "save", iface); err != nil {
-			return "", fmt.Errorf("peer applied but persistence failed: %w: %s", err, strings.TrimSpace(string(output)))
+		existingByKey[publicKey] = address
+		if err := m.persistCurrent(existingByKey); err != nil {
+			return "", fmt.Errorf("peer applied but registry persistence failed: %w", err)
 		}
 	}
 
 	return address, nil
+}
+
+func (m *PeerManager) Restore(ctx context.Context) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.Persist {
+		return 0, nil
+	}
+	runner := m.Runner
+	if runner == nil {
+		runner = ExecRunner{}
+	}
+	store := PeerStore{Path: m.DataFile}
+	peers, err := store.Load()
+	if err != nil {
+		return 0, err
+	}
+
+	restored := 0
+	for _, item := range peers {
+		if err := peer.Validate(peer.Spec{
+			Interface: m.Interface,
+			PublicKey: item.PublicKey,
+			Address:   item.Address,
+		}); err != nil {
+			return restored, fmt.Errorf("invalid stored peer: %w", err)
+		}
+		if commandOutput, err := runner.Run(
+			ctx,
+			"wg", "set", m.Interface,
+			"peer", item.PublicKey,
+			"allowed-ips", item.Address,
+		); err != nil {
+			return restored, fmt.Errorf(
+				"restore WireGuard peer: %w: %s",
+				err,
+				strings.TrimSpace(string(commandOutput)),
+			)
+		}
+		restored++
+	}
+	return restored, nil
+}
+
+func (m *PeerManager) persistCurrent(existingByKey map[string]string) error {
+	peers := make([]StoredPeer, 0, len(existingByKey))
+	for publicKey, address := range existingByKey {
+		if strings.TrimSpace(publicKey) == "" || strings.TrimSpace(address) == "" {
+			continue
+		}
+		peers = append(peers, StoredPeer{
+			PublicKey: publicKey,
+			Address:   address,
+		})
+	}
+	return (PeerStore{Path: m.DataFile}).Save(peers)
 }
 
 func parseAllowedIPs(raw string) (map[string]string, map[string]struct{}) {
