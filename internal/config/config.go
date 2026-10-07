@@ -16,6 +16,7 @@ type Config struct {
 	TunnelCIDR         string
 	ProvisioningSecret string
 	PersistPeers       bool
+	PeerDataFile       string
 }
 
 func Load() Config {
@@ -30,6 +31,7 @@ func Load() Config {
 		TunnelCIDR:         envOr("BOOSTLAB_TUNNEL_CIDR", "10.77.0.0/24"),
 		ProvisioningSecret: os.Getenv("BOOSTLAB_PROVISIONING_SECRET"),
 		PersistPeers:       envBoolOr("BOOSTLAB_WG_PERSIST_PEERS", true),
+		PeerDataFile:       envOr("BOOSTLAB_PEER_DATA_FILE", "/var/lib/boostlab/peers.json"),
 	}
 }
 
