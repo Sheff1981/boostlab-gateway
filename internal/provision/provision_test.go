@@ -87,10 +87,12 @@ func TestPeerManagerAllocatesNextFreeAddress(t *testing.T) {
 	runner := &fakeRunner{
 		showOutput: "old-key\t10.77.0.2/32\nother-key\t10.77.0.3/32\n",
 	}
+	dataFile := t.TempDir() + "/peers.json"
 	manager := PeerManager{
 		Interface:  "wg0",
 		TunnelCIDR: "10.77.0.0/24",
 		Persist:    true,
+		DataFile:   dataFile,
 		Runner:     runner,
 	}
 
@@ -104,8 +106,15 @@ func TestPeerManagerAllocatesNextFreeAddress(t *testing.T) {
 	if address != "10.77.0.4/32" {
 		t.Fatalf("expected 10.77.0.4/32, got %s", address)
 	}
-	if len(runner.calls) != 3 {
-		t.Fatalf("expected show, set, save; got %#v", runner.calls)
+	if len(runner.calls) != 2 {
+		t.Fatalf("expected show and set; got %#v", runner.calls)
+	}
+	stored, err := (PeerStore{Path: dataFile}).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stored) != 3 {
+		t.Fatalf("expected persisted peer registry, got %#v", stored)
 	}
 }
 
@@ -130,5 +139,38 @@ func TestPeerManagerReusesExistingAddress(t *testing.T) {
 	}
 	if len(runner.calls) != 1 {
 		t.Fatalf("existing peer should not be changed: %#v", runner.calls)
+	}
+}
+
+
+func TestPeerManagerRestoresStoredPeers(t *testing.T) {
+	dataFile := t.TempDir() + "/peers.json"
+	if err := (PeerStore{Path: dataFile}).Save([]StoredPeer{
+		{
+			PublicKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+			Address:   "10.77.0.9/32",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	runner := &fakeRunner{}
+	manager := PeerManager{
+		Interface:  "wg0",
+		TunnelCIDR: "10.77.0.0/24",
+		Persist:    true,
+		DataFile:   dataFile,
+		Runner:     runner,
+	}
+
+	restored, err := manager.Restore(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored != 1 {
+		t.Fatalf("expected one restored peer, got %d", restored)
+	}
+	if len(runner.calls) != 1 || !strings.Contains(runner.calls[0], "wg set wg0 peer") {
+		t.Fatalf("unexpected restore commands: %#v", runner.calls)
 	}
 }
