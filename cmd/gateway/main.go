@@ -53,14 +53,16 @@ func main() {
 		log.Info("provisioned WireGuard peers restored", "count", restored)
 	}
 
-	statusHandler := status.New(
+	statusConfig := status.New(
 		cfg.NodeID,
 		cfg.Region,
 		cfg.UDPAddr,
 		cfg.WireGuardPublicKey,
 		cfg.WireGuardPort,
 		startedAt,
-	).Routes()
+	)
+	statusConfig.WireGuardInterface = cfg.WireGuardInterface
+	statusHandler := statusConfig.Routes()
 	routeHandler := routequality.New(routeTargets).Routes()
 	provisionHandler := provision.Handler{
 		NodeID: cfg.NodeID,
