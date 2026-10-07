@@ -21,6 +21,8 @@ const (
 
 type Metrics struct {
 	TargetID      string    `json:"target_id"`
+	TargetHost    string    `json:"target_host"`
+	TCPPort       int       `json:"tcp_port"`
 	MedianRTTMs   *int      `json:"median_rtt_ms"`
 	P95RTTMs      *int      `json:"p95_rtt_ms"`
 	JitterMs      *int      `json:"jitter_ms"`
@@ -156,6 +158,8 @@ func (s *Service) Measure(ctx context.Context, targetID string) (Metrics, error)
 	}
 
 	metrics := calculate(target.ID, results, now)
+	metrics.TargetHost = target.Host
+	metrics.TCPPort = target.TCPPort
 	s.mu.Lock()
 	s.cache[targetID] = cachedMeasurement{
 		metrics: metrics,
