@@ -39,7 +39,9 @@ func ParseTargets(raw string) ([]Target, error) {
 				return nil, fmt.Errorf("target %q: invalid id", target.ID)
 			}
 		}
-		if target.Host == "" || len(target.Host) > 253 {
+		if target.Host == "" ||
+			len(target.Host) > 253 ||
+			strings.ContainsAny(target.Host, " /\\") {
 			return nil, fmt.Errorf("target %q: invalid host", target.ID)
 		}
 		if target.TCPPort < 1 || target.TCPPort > 65535 {
