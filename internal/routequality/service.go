@@ -13,10 +13,11 @@ import (
 )
 
 const (
-	defaultSamples = 7
-	connectTimeout = 900 * time.Millisecond
-	sampleGap      = 90 * time.Millisecond
-	cacheTTL       = 5 * time.Second
+	defaultSamples    = 7
+	connectTimeout    = 900 * time.Millisecond
+	sampleGap         = 90 * time.Millisecond
+	cacheTTL          = 5 * time.Second
+	measurementBudget = 8 * time.Second
 )
 
 type Metrics struct {
@@ -72,7 +73,9 @@ func (s *Service) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/route-quality/{target}", func(w http.ResponseWriter, r *http.Request) {
 		targetID := r.PathValue("target")
-		metrics, err := s.Measure(r.Context(), targetID)
+		ctx, cancel := context.WithTimeout(r.Context(), measurementBudget)
+		defer cancel()
+		metrics, err := s.Measure(ctx, targetID)
 		if errors.Is(err, errUnknownTarget) {
 			http.Error(w, "unknown route target", http.StatusNotFound)
 			return
@@ -160,10 +163,11 @@ func (s *Service) Measure(ctx context.Context, targetID string) (Metrics, error)
 	metrics := calculate(target.ID, results, now)
 	metrics.TargetHost = target.Host
 	metrics.TCPPort = target.TCPPort
+	finishedAt := s.now().UTC()
 	s.mu.Lock()
 	s.cache[targetID] = cachedMeasurement{
 		metrics: metrics,
-		until:   now.Add(cacheTTL),
+		until:   finishedAt.Add(cacheTTL),
 	}
 	s.mu.Unlock()
 	return metrics, nil
