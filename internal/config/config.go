@@ -17,6 +17,8 @@ type Config struct {
 	ProvisioningSecret string
 	PersistPeers       bool
 	PeerDataFile       string
+	PeerStaleHours     int
+	PeerSweepMinutes   int
 }
 
 func Load() Config {
@@ -32,6 +34,8 @@ func Load() Config {
 		ProvisioningSecret: os.Getenv("BOOSTLAB_PROVISIONING_SECRET"),
 		PersistPeers:       envBoolOr("BOOSTLAB_WG_PERSIST_PEERS", true),
 		PeerDataFile:       envOr("BOOSTLAB_PEER_DATA_FILE", "/var/lib/boostlab/peers.json"),
+		PeerStaleHours:     envIntOr("BOOSTLAB_PEER_STALE_HOURS", 720),
+		PeerSweepMinutes:   envIntOr("BOOSTLAB_PEER_SWEEP_MINUTES", 60),
 	}
 }
 
