@@ -10,8 +10,9 @@ import (
 )
 
 type StoredPeer struct {
-	PublicKey string `json:"public_key"`
-	Address   string `json:"address"`
+	PublicKey            string `json:"public_key"`
+	Address              string `json:"address"`
+	LastRegisteredAtUnix int64  `json:"last_registered_at_unix,omitempty"`
 }
 
 type PeerStore struct {
