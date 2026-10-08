@@ -53,6 +53,41 @@ func main() {
 		log.Info("provisioned WireGuard peers restored", "count", restored)
 	}
 
+	if cfg.PeerStaleHours > 0 && cfg.PeerSweepMinutes > 0 {
+		maxAge := time.Duration(cfg.PeerStaleHours) * time.Hour
+		sweepEvery := time.Duration(cfg.PeerSweepMinutes) * time.Minute
+
+		runPeerSweep := func() {
+			removed, err := peerManager.PruneStale(ctx, maxAge, time.Now().UTC())
+			if err != nil {
+				log.Warn("stale peer sweep failed", "error", err)
+				return
+			}
+			if removed > 0 {
+				log.Info("stale WireGuard peers removed", "count", removed)
+			}
+		}
+		runPeerSweep()
+
+		go func() {
+			ticker := time.NewTicker(sweepEvery)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					runPeerSweep()
+				}
+			}
+		}()
+		log.Info(
+			"stale peer maintenance enabled",
+			"max_age_hours", cfg.PeerStaleHours,
+			"sweep_minutes", cfg.PeerSweepMinutes,
+		)
+	}
+
 	statusConfig := status.New(
 		cfg.NodeID,
 		cfg.Region,
