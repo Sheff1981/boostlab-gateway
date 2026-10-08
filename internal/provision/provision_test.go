@@ -64,14 +64,18 @@ func TestVerifyTicketRejectsWrongGatewayAndSignature(t *testing.T) {
 }
 
 type fakeRunner struct {
-	showOutput string
-	calls      []string
+	showOutput      string
+	handshakeOutput string
+	calls           []string
 }
 
 func (f *fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	call := strings.TrimSpace(name + " " + strings.Join(args, " "))
 	f.calls = append(f.calls, call)
 	if name == "wg" && len(args) >= 3 && args[0] == "show" {
+		if args[2] == "latest-handshakes" {
+			return []byte(f.handshakeOutput), nil
+		}
 		return []byte(f.showOutput), nil
 	}
 	if name == "wg" && len(args) >= 1 && args[0] == "set" {
@@ -197,5 +201,102 @@ func TestTicketReplayGuardExpiresEntries(t *testing.T) {
 	}
 	if !guard.Use("nonce-1", now.Add(time.Minute).Unix(), now.Add(2*time.Second)) {
 		t.Fatal("expected expired nonce to be reusable")
+	}
+}
+
+
+func TestPeerManagerPrunesOnlyStalePeers(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	dataFile := t.TempDir() + "/peers.json"
+	staleKey := "stale-key"
+	freshKey := "fresh-key"
+
+	if err := (PeerStore{Path: dataFile}).Save([]StoredPeer{
+		{
+			PublicKey:            staleKey,
+			Address:              "10.77.0.8/32",
+			LastRegisteredAtUnix: now.Add(-40 * 24 * time.Hour).Unix(),
+		},
+		{
+			PublicKey:            freshKey,
+			Address:              "10.77.0.9/32",
+			LastRegisteredAtUnix: now.Add(-40 * 24 * time.Hour).Unix(),
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	runner := &fakeRunner{
+		handshakeOutput: staleKey + "\t" +
+			fmt.Sprint(now.Add(-40*24*time.Hour).Unix()) + "\n" +
+			freshKey + "\t" +
+			fmt.Sprint(now.Add(-time.Hour).Unix()) + "\n",
+	}
+	manager := PeerManager{
+		Interface:  "wg0",
+		TunnelCIDR: "10.77.0.0/24",
+		Persist:    true,
+		DataFile:   dataFile,
+		Runner:     runner,
+	}
+
+	removed, err := manager.PruneStale(
+		context.Background(),
+		30*24*time.Hour,
+		now,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed != 1 {
+		t.Fatalf("expected one stale peer removed, got %d", removed)
+	}
+
+	stored, err := (PeerStore{Path: dataFile}).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stored) != 1 || stored[0].PublicKey != freshKey {
+		t.Fatalf("unexpected remaining peers: %#v", stored)
+	}
+	if !strings.Contains(strings.Join(runner.calls, "\n"), "peer "+staleKey+" remove") {
+		t.Fatalf("expected stale peer removal command: %#v", runner.calls)
+	}
+}
+
+func TestPeerManagerPrunesNeverConnectedOldRegistration(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	dataFile := t.TempDir() + "/peers.json"
+	key := "never-connected"
+
+	if err := (PeerStore{Path: dataFile}).Save([]StoredPeer{
+		{
+			PublicKey:            key,
+			Address:              "10.77.0.10/32",
+			LastRegisteredAtUnix: now.Add(-31 * 24 * time.Hour).Unix(),
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	runner := &fakeRunner{}
+	manager := PeerManager{
+		Interface:  "wg0",
+		TunnelCIDR: "10.77.0.0/24",
+		Persist:    true,
+		DataFile:   dataFile,
+		Runner:     runner,
+	}
+
+	removed, err := manager.PruneStale(
+		context.Background(),
+		30*24*time.Hour,
+		now,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed != 1 {
+		t.Fatalf("expected never-connected stale peer removed, got %d", removed)
 	}
 }
